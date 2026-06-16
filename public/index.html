@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Multi-Session Gateway</title>
+    <!-- Fonts & Icons -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Main Style -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="glass-bg"></div>
+    <div class="glow-orb orb-1"></div>
+    <div class="glow-orb orb-2"></div>
+
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="brand">
+                <div class="brand-icon">
+                    <i class="fa-brands fa-whatsapp text-gradient"></i>
+                </div>
+                <h2>WA<span>Gateway</span></h2>
+            </div>
+            
+            <nav class="nav-menu">
+                <a href="#" class="nav-item active" data-tab="overview">
+                    <i class="fa-solid fa-gauge-high"></i>
+                    <span>Overview</span>
+                </a>
+                <a href="#" class="nav-item" data-tab="api-tester">
+                    <i class="fa-solid fa-paper-plane"></i>
+                    <span>API Tester</span>
+                </a>
+                <a href="#" class="nav-item" data-tab="history">
+                    <i class="fa-solid fa-clock-rotate-left"></i>
+                    <span>History</span>
+                </a>
+                <a href="#" class="nav-item" data-tab="settings">
+                    <i class="fa-solid fa-sliders"></i>
+                    <span>Settings</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="api-info-box">
+                    <div class="info-label">Server Port</div>
+                    <div class="info-val" id="lbl-port">3000</div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Topbar -->
+            <header class="topbar">
+                <div class="page-title">
+                    <h1 id="page-title-text">Multi-Session Gateway</h1>
+                    <p class="subtitle" id="page-subtitle-text">Manage multiple WhatsApp connections and numbers concurrently.</p>
+                </div>
+                
+                <div class="gateway-status-badge connected" id="global-badge">
+                    <span class="status-pulse"></span>
+                    <span class="status-text" id="global-badge-text">Gateway Online</span>
+                </div>
+            </header>
+
+            <!-- Content Area -->
+            <div class="content-body">
+                <!-- Tab: Overview -->
+                <section id="tab-overview" class="tab-pane active">
+                    <div class="grid-layout">
+                        <!-- Left Panel: Session Creator & Session List -->
+                        <div class="left-panel">
+                            <!-- Add Session Card -->
+                            <div class="card glass-card margin-bottom-20">
+                                <div class="card-header">
+                                    <h3>Create New WhatsApp Session</h3>
+                                </div>
+                                <div class="card-body">
+                                    <form id="form-create-session" class="row-form">
+                                        <div class="input-with-icon flex-grow">
+                                            <i class="fa-solid fa-folder-plus"></i>
+                                            <input type="text" id="input-session-name" placeholder="e.g. erp_project, retail_app" required>
+                                        </div>
+                                        <button type="submit" class="btn btn-primary">
+                                            <i class="fa-solid fa-plus"></i> Add Device
+                                        </button>
+                                    </form>
+                                    <small class="form-help">Create a separate session identifier for each number or project.</small>
+                                </div>
+                            </div>
+
+                            <!-- Sessions List Card -->
+                            <div class="card glass-card list-sessions-card">
+                                <div class="card-header">
+                                    <h3>Connected Devices / Sessions</h3>
+                                </div>
+                                <div class="card-body scroll-y" id="sessions-list-container">
+                                    <!-- Dynamic Session Items will be injected here -->
+                                    <div class="no-data">
+                                        <i class="fa-solid fa-mobile-screen"></i>
+                                        <p>No WhatsApp sessions created yet.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Right Panel: Connection Details (QR or Success) & Logs -->
+                        <div class="right-panel">
+                            <!-- Session Detail Card (QR Scan details) -->
+                            <div class="card glass-card qr-card-container margin-bottom-20">
+                                <div class="card-header">
+                                    <h3 id="detail-session-title">Select a Session</h3>
+                                    <button class="btn btn-danger btn-sm" id="btn-logout" style="display: none;">
+                                        <i class="fa-solid fa-power-off"></i> Delete Session
+                                    </button>
+                                </div>
+                                <div class="card-body connection-display" id="session-detail-body">
+                                    <div class="state-wrapper text-muted">
+                                        <i class="fa-solid fa-arrow-pointer icon-large"></i>
+                                        <h4>No Session Selected</h4>
+                                        <p>Click on a WhatsApp session from the left list to view QR code or link status.</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Session Webhook Config Card -->
+                            <div class="card glass-card margin-bottom-20" id="card-session-settings" style="display: none;">
+                                <div class="card-header">
+                                    <h3>Session Webhook Settings</h3>
+                                </div>
+                                <div class="card-body">
+                                    <form id="form-session-settings" class="row-form">
+                                        <div class="input-with-icon flex-grow">
+                                            <i class="fa-solid fa-link"></i>
+                                            <input type="url" id="input-session-webhook" placeholder="e.g. http://localhost:8000/webhook-a">
+                                        </div>
+                                        <button type="submit" class="btn btn-primary">
+                                            <i class="fa-solid fa-save"></i> Save Webhook
+                                        </button>
+                                    </form>
+                                    <small class="form-help">Set a separate callback URL for this session (Overrides the global webhook URL).</small>
+                                </div>
+                            </div>
+
+                            <!-- Logs Card -->
+                            <div class="card glass-card log-card">
+                                <div class="card-header">
+                                    <h3>System Logs Console</h3>
+                                    <button class="btn btn-secondary btn-sm" id="btn-clear-logs">
+                                        <i class="fa-solid fa-trash"></i> Clear
+                                    </button>
+                                </div>
+                                <div class="card-body log-body">
+                                    <pre id="terminal-logs" class="terminal-view"></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Tab: API Tester -->
+                <section id="tab-api-tester" class="tab-pane">
+                    <div class="grid-layout-half">
+                        <!-- Tester Form -->
+                        <div class="card glass-card">
+                            <div class="card-header">
+                                <h3>Send Direct Message</h3>
+                            </div>
+                            <div class="card-body">
+                                <form id="form-send-message">
+                                    <div class="form-group">
+                                        <label for="input-api-key">API Key (x-api-key)</label>
+                                        <div class="input-with-icon">
+                                            <i class="fa-solid fa-key"></i>
+                                            <input type="password" id="input-api-key" placeholder="Enter API Key from .env" required>
+                                        </div>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label for="select-tester-session">Select Session / Project</label>
+                                        <div class="input-with-icon">
+                                            <i class="fa-solid fa-mobile-screen"></i>
+                                            <select id="select-tester-session" class="select-control" required>
+                                                <!-- Dynamic list of sessions will be injected here -->
+                                                <option value="" disabled selected>No active sessions</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label for="input-phone">Phone Number</label>
+                                        <div class="input-with-icon">
+                                            <i class="fa-solid fa-phone"></i>
+                                            <input type="text" id="input-phone" placeholder="e.g. 628123456789 or 08123456789" required>
+                                        </div>
+                                        <small class="form-help">Use international format (starts with 62) or local 08.</small>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label for="input-media-url">Media Attachment URL (Optional)</label>
+                                        <div class="input-with-icon">
+                                            <i class="fa-solid fa-paperclip"></i>
+                                            <input type="url" id="input-media-url" placeholder="e.g. https://domain.com/invoice.pdf or image.png">
+                                        </div>
+                                        <small class="form-help">Enter a public URL to send a PDF, image, or video.</small>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label for="input-filename">Document Filename (Optional)</label>
+                                        <div class="input-with-icon">
+                                            <i class="fa-solid fa-file-signature"></i>
+                                            <input type="text" id="input-filename" placeholder="e.g. Invoice_123.pdf">
+                                        </div>
+                                        <small class="form-help">Only needed when sending documents (PDFs, Excel, etc.) to set their download name.</small>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label for="input-message">Message Text / Media Caption (Optional)</label>
+                                        <textarea id="input-message" rows="4" placeholder="Hello from WA Gateway!"></textarea>
+                                    </div>
+
+                                    <button type="submit" class="btn btn-primary btn-block" id="btn-send-msg">
+                                        <i class="fa-solid fa-paper-plane"></i> Send Message
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+
+                        <!-- Response Viewer -->
+                        <div class="card glass-card">
+                            <div class="card-header">
+                                <h3>API Response</h3>
+                            </div>
+                            <div class="card-body response-body">
+                                <pre id="api-response-view" class="terminal-view">Waiting for request...</pre>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Tab: History -->
+                <section id="tab-history" class="tab-pane">
+                    <!-- Filters Card -->
+                    <div class="card glass-card margin-bottom-20">
+                        <div class="card-header">
+                            <h3>Filter Logs</h3>
+                            <button class="btn btn-danger btn-sm" id="btn-clear-history">
+                                <i class="fa-solid fa-trash-can"></i> Clear History
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <div class="history-filters-bar">
+                                <div class="filter-group">
+                                    <label for="history-session">Session / Project</label>
+                                    <select id="history-session" class="select-control">
+                                        <option value="">All Sessions</option>
+                                    </select>
+                                </div>
+                                <div class="filter-group">
+                                    <label for="history-direction">Direction</label>
+                                    <select id="history-direction" class="select-control">
+                                        <option value="">All Directions</option>
+                                        <option value="outgoing">Outgoing (Sent/Queued)</option>
+                                        <option value="incoming">Incoming (Received)</option>
+                                    </select>
+                                </div>
+                                <div class="filter-group">
+                                    <label for="history-status">Status</label>
+                                    <select id="history-status" class="select-control">
+                                        <option value="">All Statuses</option>
+                                        <option value="queued">Queued</option>
+                                        <option value="sent">Sent</option>
+                                        <option value="failed">Failed</option>
+                                        <option value="received">Received</option>
+                                    </select>
+                                </div>
+                                <div class="filter-group filter-search">
+                                    <label for="history-search">Search Text / Phone</label>
+                                    <div class="input-with-icon">
+                                        <i class="fa-solid fa-magnifying-glass"></i>
+                                        <input type="text" id="history-search" placeholder="Type keyword...">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Logs Table Card -->
+                    <div class="card glass-card history-logs-card">
+                        <div class="card-header">
+                            <h3>Logs Database</h3>
+                            <div class="pagination-info" id="history-pagination-info">
+                                Showing 0 of 0 logs
+                            </div>
+                        </div>
+                        <div class="card-body scroll-x scroll-y" style="padding: 0;">
+                            <div class="history-table-container">
+                                <table class="history-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Timestamp</th>
+                                            <th>Session</th>
+                                            <th>Direction</th>
+                                            <th>From / To JID</th>
+                                            <th>Type</th>
+                                            <th>Message / Caption</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="history-table-body">
+                                        <!-- Injected dynamically -->
+                                        <tr>
+                                            <td colspan="7" class="text-center py-4 text-muted">
+                                                <i class="fa-solid fa-database icon-large" style="display: block; margin-bottom: 10px;"></i>
+                                                Loading history records...
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="card-footer pagination-footer">
+                            <button class="btn btn-secondary btn-sm" id="btn-prev-page" disabled>
+                                <i class="fa-solid fa-chevron-left"></i> Previous
+                            </button>
+                            <span class="page-number-display" id="lbl-page-number">Page 1</span>
+                            <button class="btn btn-secondary btn-sm" id="btn-next-page" disabled>
+                                Next <i class="fa-solid fa-chevron-right"></i>
+                            </button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Tab: Settings -->
+                <section id="tab-settings" class="tab-pane">
+                    <div class="card glass-card settings-card">
+                        <div class="card-header">
+                            <h3>Webhook & Web Gateway Settings</h3>
+                        </div>
+                        <div class="card-body">
+                            <form id="form-settings">
+                                <div class="form-group">
+                                    <label for="settings-api-key">API Authorization Key (x-api-key)</label>
+                                    <div class="input-with-icon">
+                                        <i class="fa-solid fa-key"></i>
+                                        <input type="password" id="settings-api-key" placeholder="Enter API Key to authorize settings change" required>
+                                    </div>
+                                    <small class="form-help">Security key is required to update gateway configurations.</small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="input-webhook">Webhook URL</label>
+                                    <div class="input-with-icon">
+                                        <i class="fa-solid fa-link"></i>
+                                        <input type="url" id="input-webhook" placeholder="e.g. http://yourdomain.com/webhook">
+                                    </div>
+                                    <small class="form-help">We will send a POST request to this URL whenever a message is received or connection state changes.</small>
+                                </div>
+
+                                <button type="submit" class="btn btn-primary" id="btn-save-settings">
+                                    <i class="fa-solid fa-save"></i> Save Configurations
+                                </button>
+                            </form>
+
+                            <hr class="divider">
+
+                            <div class="integration-docs">
+                                <h4>Quick HTTP API Integration Doc</h4>
+                                <p>To send messages programmatically, make the following HTTP request:</p>
+                                <pre class="terminal-view code-snippet">
+POST /api/send-message
+Headers:
+  Content-Type: application/json
+  x-api-key: [YOUR_API_KEY]
+
+Body:
+{
+  "session": "erp_project",    // Specify the session name (optional, falls back to first active)
+  "to": "628123456789",
+  "message": "Testing WhatsApp gateway!"
+}</pre>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <!-- Socket.io client -->
+    <script src="/socket.io/socket.io.js"></script>
+    <!-- Frontend JS -->
+    <script src="app.js"></script>
+</body>
+</html>
