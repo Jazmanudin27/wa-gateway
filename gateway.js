@@ -123,7 +123,7 @@ class WhatsAppGateway extends EventEmitter {
             version,
             auth: state,
             logger: this.logger,
-            browser: [`WA Gateway (${sessionId})`, 'Chrome', '1.0.0'],
+            browser: ['WhatsApp Web', 'Chrome', '10.35.22'],
             defaultQueryTimeoutMs: 60000,
             connectTimeoutMs: 60000,
         });
