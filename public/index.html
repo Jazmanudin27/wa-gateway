@@ -82,16 +82,32 @@
                                     <h3>Create New WhatsApp Session</h3>
                                 </div>
                                 <div class="card-body">
-                                    <form id="form-create-session" class="row-form">
-                                        <div class="input-with-icon flex-grow">
+                                    <form id="form-create-session" style="display: flex; flex-direction: column; gap: 12px;">
+                                        <div class="input-with-icon">
                                             <i class="fa-solid fa-folder-plus"></i>
-                                            <input type="text" id="input-session-name" placeholder="e.g. erp_project, retail_app" required>
+                                            <input type="text" id="input-session-name" placeholder="Nama Sesi (e.g. pedasalami)" required>
                                         </div>
-                                        <button type="submit" class="btn btn-primary">
-                                            <i class="fa-solid fa-plus"></i> Add Device
+                                        
+                                        <div class="input-with-icon">
+                                            <i class="fa-solid fa-circle-nodes"></i>
+                                            <select id="select-conn-type">
+                                                <option value="qr">QR Code (Scan QR)</option>
+                                                <option value="pairing">Nomor Telepon (Kode Pairing)</option>
+                                            </select>
+                                        </div>
+
+                                        <div id="div-pairing-phone" style="display: none;">
+                                            <div class="input-with-icon">
+                                                <i class="fa-solid fa-phone"></i>
+                                                <input type="text" id="input-session-phone" placeholder="Nomor WhatsApp (e.g. 6289523888200)">
+                                            </div>
+                                            <small class="form-help">Gunakan format angka saja diawali 62.</small>
+                                        </div>
+
+                                        <button type="submit" class="btn btn-primary btn-block">
+                                            <i class="fa-solid fa-plus"></i> Tambah Perangkat
                                         </button>
                                     </form>
-                                    <small class="form-help">Create a separate session identifier for each number or project.</small>
                                 </div>
                             </div>
 

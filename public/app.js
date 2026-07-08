@@ -22,6 +22,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const formCreateSession = document.getElementById('form-create-session');
     const inputSessionName = document.getElementById('input-session-name');
+    const selectConnType = document.getElementById('select-conn-type');
+    const divPairingPhone = document.getElementById('div-pairing-phone');
+    const inputSessionPhone = document.getElementById('input-session-phone');
 
     const formSendMessage = document.getElementById('form-send-message');
     const selectTesterSession = document.getElementById('select-tester-session');
@@ -140,12 +143,58 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // Save current input and display state before redrawing to prevent data loss on automatic updates
+        const existingInput = document.getElementById('input-pairing-phone');
+        const existingDisplay = document.getElementById('pairing-code-display');
+        const existingBtn = document.getElementById('btn-request-pairing');
+        
+        const preservedPhone = existingInput ? existingInput.value : '';
+        const preservedDisplayShow = existingDisplay ? existingDisplay.style.display : 'none';
+        const preservedDisplayHtml = existingDisplay ? existingDisplay.innerHTML : '';
+        const preservedBtnDisabled = existingBtn ? existingBtn.disabled : false;
+        const preservedBtnText = existingBtn ? existingBtn.textContent : 'Dapatkan Kode';
+
         detailSessionTitle.textContent = `Device Session: ${session.sessionId}`;
         
         // Show delete button and session settings card
         btnLogout.style.display = 'inline-flex';
         cardSessionSettings.style.display = 'block';
         inputSessionWebhook.value = session.webhookUrl || '';
+
+        const pairingHtml = `
+            <div class="pairing-container" style="margin-top: 24px; border-top: 1px dashed var(--border-color); padding-top: 20px; width: 100%; text-align: center;">
+                <p style="font-size: 13.5px; color: var(--text-secondary); margin-bottom: 12px; font-weight: 500;">
+                    <i class="fa-solid fa-link" style="color: var(--primary-start); margin-right: 4px;"></i> Atau Hubungkan Tanpa Scan (Kode Pairing)
+                </p>
+                <div style="display: flex; gap: 8px; justify-content: center; max-width: 320px; margin: 0 auto;">
+                    <div class="input-with-icon" style="flex-grow: 1;">
+                        <i class="fa-solid fa-phone" style="left: 12px; font-size: 14px;"></i>
+                        <input type="text" id="input-pairing-phone" placeholder="Contoh: 628123456789" style="padding: 10px 10px 10px 36px; font-size: 13px; border-radius: var(--radius-sm);">
+                    </div>
+                    <button class="btn btn-secondary btn-sm" id="btn-request-pairing" style="padding: 0 16px; border-radius: var(--radius-sm); font-size: 13px; white-space: nowrap;">Dapatkan Kode</button>
+                </div>
+                <div id="pairing-code-display" style="margin-top: 16px; display: none;"></div>
+            </div>
+        `;
+
+        function attachPairingListeners() {
+            const btn = document.getElementById('btn-request-pairing');
+            const input = document.getElementById('input-pairing-phone');
+            if (!btn || !input) return;
+            
+            btn.addEventListener('click', () => {
+                const phone = input.value.trim();
+                if (!phone) {
+                    alert('Silakan masukkan nomor telepon WhatsApp Anda (contoh: 628123456789).');
+                    return;
+                }
+                
+                btn.disabled = true;
+                btn.textContent = 'Meminta...';
+                
+                socket.emit('request-pairing-code', { sessionId: activeSessionId, phoneNumber: phone });
+            });
+        }
 
         // Render body according to state
         if (session.status === 'connected') {
@@ -162,15 +211,41 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 </div>
             `;
-        } else if (session.status === 'qr' && session.qrCode) {
-            sessionDetailBody.innerHTML = `
-                <div class="qr-wrapper">
-                    <div class="qr-code-frame">
-                        <img src="${session.qrCode}" alt="WhatsApp QR Code">
+        } else if (session.status === 'qr') {
+            if (session.pairingCode) {
+                sessionDetailBody.innerHTML = `
+                    <div class="state-wrapper">
+                        <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); padding: 16px 24px; border-radius: var(--radius-md); font-size: 28px; font-weight: 700; letter-spacing: 5px; color: var(--success); font-family: var(--font-mono); display: inline-block; margin-top: 20px;">
+                            ${session.pairingCode}
+                        </div>
+                        <h4>Kode Pairing Aktif</h4>
+                        <p class="qr-instructions" style="max-width: 320px; line-height: 1.6;">
+                            Buka WhatsApp di HP Anda → ketuk <b>Perangkat Tertaut</b> → <b>Tautkan Perangkat</b> → Ketuk <b>"Tautkan dengan nomor telepon saja"</b> di bagian bawah layar HP, lalu masukkan kode di atas.
+                        </p>
                     </div>
-                    <p class="qr-instructions">Scan this QR code using WhatsApp on phone linked to <b>${session.sessionId}</b>.</p>
-                </div>
-            `;
+                `;
+            } else if (session.qrCode) {
+                sessionDetailBody.innerHTML = `
+                    <div class="qr-wrapper">
+                        <div class="qr-code-frame">
+                            <img src="${session.qrCode}" alt="WhatsApp QR Code">
+                        </div>
+                        <p class="qr-instructions">Scan this QR code using WhatsApp on phone linked to <b>${session.sessionId}</b>.</p>
+                        ${pairingHtml}
+                    </div>
+                `;
+                attachPairingListeners();
+            } else {
+                sessionDetailBody.innerHTML = `
+                    <div class="state-wrapper">
+                        <div class="loading-spinner">
+                            <i class="fa-solid fa-circle-notch fa-spin"></i>
+                        </div>
+                        <h4>Generating pairing data...</h4>
+                        <p>Requesting connection profile from WhatsApp servers.</p>
+                    </div>
+                `;
+            }
         } else if (session.status === 'connecting') {
             sessionDetailBody.innerHTML = `
                 <div class="state-wrapper">
@@ -179,8 +254,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                     <h4>Initializing connection...</h4>
                     <p>Opening WebSocket stream for session <b>${session.sessionId}</b>.</p>
+                    ${pairingHtml}
                 </div>
             `;
+            attachPairingListeners();
         } else {
             sessionDetailBody.innerHTML = `
                 <div class="state-wrapper text-muted">
@@ -196,6 +273,21 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('btn-reconnect-session').addEventListener('click', () => {
                 socket.emit('create-session', { sessionId: session.sessionId });
             });
+        }
+
+        // Restore preserved input and button states after innerHTML redraw
+        const newInput = document.getElementById('input-pairing-phone');
+        const newDisplay = document.getElementById('pairing-code-display');
+        const newBtn = document.getElementById('btn-request-pairing');
+        
+        if (newInput && preservedPhone) newInput.value = preservedPhone;
+        if (newDisplay && preservedDisplayShow !== 'none') {
+            newDisplay.style.display = preservedDisplayShow;
+            newDisplay.innerHTML = preservedDisplayHtml;
+        }
+        if (newBtn && preservedBtnDisabled) {
+            newBtn.disabled = preservedBtnDisabled;
+            newBtn.textContent = preservedBtnText;
         }
     }
 
@@ -331,6 +423,47 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    socket.on('pairing-code-response', ({ sessionId, code, error }) => {
+        if (activeSessionId !== sessionId) return;
+        
+        const display = document.getElementById('pairing-code-display');
+        const btn = document.getElementById('btn-request-pairing');
+        if (!display || !btn) return;
+        
+        btn.disabled = false;
+        btn.textContent = 'Dapatkan Kode';
+        
+        if (error) {
+            alert(`Gagal membuat kode pairing: ${error}`);
+            display.style.display = 'none';
+            return;
+        }
+        
+        display.style.display = 'block';
+        display.innerHTML = `
+            <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); padding: 12px; border-radius: var(--radius-sm); font-size: 22px; font-weight: 700; letter-spacing: 4px; color: var(--success); font-family: var(--font-mono); display: inline-block; margin-top: 10px;">
+                ${code}
+            </div>
+            <p style="font-size: 12.5px; color: var(--text-muted); margin-top: 8px; line-height: 1.5; max-width: 320px; margin-left: auto; margin-right: auto;">
+                Buka WhatsApp di HP Anda → ketuk <b>Perangkat Tertaut</b> → <b>Tautkan Perangkat</b> → Ketuk <b>"Tautkan dengan nomor telepon saja"</b> di bagian bawah layar HP, lalu masukkan kode di atas.
+            </p>
+        `;
+    });
+
+    // Toggle pairing phone input visibility
+    if (selectConnType) {
+        selectConnType.addEventListener('change', () => {
+            if (selectConnType.value === 'pairing') {
+                divPairingPhone.style.display = 'block';
+                inputSessionPhone.required = true;
+            } else {
+                divPairingPhone.style.display = 'none';
+                inputSessionPhone.required = false;
+                inputSessionPhone.value = '';
+            }
+        });
+    }
+
     // Form: Create Session Submit
     formCreateSession.addEventListener('submit', (e) => {
         e.preventDefault();
@@ -341,10 +474,23 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        const connType = selectConnType ? selectConnType.value : 'qr';
+        const phone = inputSessionPhone ? inputSessionPhone.value.trim() : '';
+
         appendLog(`[System] Requesting creation of session: "${sessionName}"...`);
-        socket.emit('create-session', { sessionId: sessionName });
+        socket.emit('create-session', { 
+            sessionId: sessionName,
+            phoneNumber: connType === 'pairing' ? phone : null
+        });
         
         inputSessionName.value = ''; // Reset input
+        if (inputSessionPhone) {
+            inputSessionPhone.value = '';
+            inputSessionPhone.required = false;
+        }
+        if (selectConnType) selectConnType.value = 'qr';
+        if (divPairingPhone) divPairingPhone.style.display = 'none';
+        
         activeSessionId = sessionName; // Auto select the new session
     });
 

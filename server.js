@@ -57,6 +57,18 @@ io.on('connection', (socket) => {
         }
     });
 
+    // Handle request for phone number pairing code
+    socket.on('request-pairing-code', async ({ sessionId, phoneNumber }) => {
+        if (!sessionId || !phoneNumber) return;
+        try {
+            const code = await gateway.requestPairingCode(sessionId, phoneNumber);
+            socket.emit('pairing-code-response', { sessionId, code });
+        } catch (err) {
+            socket.emit('log', `[System] Failed to generate pairing code: ${err.message}`);
+            socket.emit('pairing-code-response', { sessionId, error: err.message });
+        }
+    });
+
     // Handle logout requested from dashboard
     socket.on('logout-session', async ({ sessionId }) => {
         if (!sessionId) return;

@@ -1,4 +1,4 @@
-import makeWASocket, { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } from '@whiskeysockets/baileys';
+import makeWASocket, { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, Browsers } from '@whiskeysockets/baileys';
 import { EventEmitter } from 'events';
 import pino from 'pino';
 import path from 'path';
@@ -65,7 +65,7 @@ class WhatsAppGateway extends EventEmitter {
     }
 
     // Initialize/Create a WhatsApp session
-    async createSession(sessionId) {
+    async createSession(sessionId, phoneNumber = null) {
         this.emit('log', `[${sessionId}] Initializing session...`);
 
         // Clean up session if it already exists
@@ -100,6 +100,7 @@ class WhatsAppGateway extends EventEmitter {
             sock: null,
             status: 'connecting',
             qrCodeData: null,
+            pairingCode: null,
             queue: [],
             isProcessingQueue: false,
             webhookUrl: sessionWebhook
@@ -109,7 +110,7 @@ class WhatsAppGateway extends EventEmitter {
 
         const { state, saveCreds } = await useMultiFileAuthState(sessionFolder);
 
-        // Fetch latest version
+        // Fetch latest version or fallback to stable
         let version = [2, 3000, 1015901307];
         try {
             const latest = await fetchLatestBaileysVersion();
@@ -123,7 +124,7 @@ class WhatsAppGateway extends EventEmitter {
             version,
             auth: state,
             logger: this.logger,
-            browser: ['WhatsApp Web', 'Chrome', '10.35.22'],
+            browser: Browsers.macOS('Desktop'),
             defaultQueryTimeoutMs: 60000,
             connectTimeoutMs: 60000,
         });
@@ -139,13 +140,34 @@ class WhatsAppGateway extends EventEmitter {
 
             if (qr) {
                 sessionObj.status = 'qr';
-                try {
-                    sessionObj.qrCodeData = await QRCode.toDataURL(qr);
-                    this.emit('qr', { sessionId, qrCode: sessionObj.qrCodeData });
-                    this.emit('status', { sessionId, status: 'qr' });
-                    this.emit('log', `[${sessionId}] New QR Code generated.`);
-                } catch (err) {
-                    this.emit('log', `[${sessionId}] Error rendering QR: ${err.message}`);
+
+                // Request pairing code if phone number is provided during creation and we haven't requested it yet
+                if (phoneNumber && !sessionObj.pairingCode) {
+                    try {
+                        const cleanPhone = phoneNumber.replace(/\D/g, '');
+                        this.emit('log', `[${sessionId}] Requesting pairing code for JID: ${cleanPhone} during socket initialization...`);
+                        const code = await sock.requestPairingCode(cleanPhone);
+                        sessionObj.pairingCode = code;
+                        this.emit('status', { sessionId, status: 'qr' }); // Refresh to display the code
+                        this.emit('log', `[${sessionId}] Pairing Code generated: ${code}`);
+                    } catch (err) {
+                        this.emit('log', `[${sessionId}] Failed to generate pairing code: ${err.message}`);
+                        // Fallback to displaying QR code if pairing fails
+                        try {
+                            sessionObj.qrCodeData = await QRCode.toDataURL(qr);
+                            this.emit('qr', { sessionId, qrCode: sessionObj.qrCodeData });
+                        } catch (qrErr) {}
+                    }
+                } else if (!phoneNumber) {
+                    // Regular QR code flow
+                    try {
+                        sessionObj.qrCodeData = await QRCode.toDataURL(qr);
+                        this.emit('qr', { sessionId, qrCode: sessionObj.qrCodeData });
+                        this.emit('status', { sessionId, status: 'qr' });
+                        this.emit('log', `[${sessionId}] New QR Code generated.`);
+                    } catch (err) {
+                        this.emit('log', `[${sessionId}] Error rendering QR: ${err.message}`);
+                    }
                 }
             }
 
@@ -173,8 +195,10 @@ class WhatsAppGateway extends EventEmitter {
             }
 
             if (connection === 'close') {
-                const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+                const isRegistered = sock.authState?.creds?.registered;
+                const shouldReconnect = isRegistered && lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
                 const errDetail = lastDisconnect?.error?.message || 'unknown';
+                
                 this.emit('log', `[${sessionId}] Connection closed due to: ${errDetail}. Reconnecting: ${shouldReconnect}`);
 
                 if (shouldReconnect) {
@@ -192,11 +216,15 @@ class WhatsAppGateway extends EventEmitter {
                 } else {
                     sessionObj.status = 'disconnected';
                     sessionObj.qrCodeData = null;
+                    sessionObj.pairingCode = null;
                     this.emit('status', { sessionId, status: 'disconnected' });
-                    this.emit('log', `[${sessionId}] Session logged out. Deleting credentials...`);
+                    this.emit('log', `[${sessionId}] Session stopped.`);
 
-                    this.clearSessionFiles(sessionId);
-                    this.sessions.delete(sessionId);
+                    if (lastDisconnect?.error?.output?.statusCode === DisconnectReason.loggedOut) {
+                        this.emit('log', `[${sessionId}] Session logged out. Deleting credentials...`);
+                        this.clearSessionFiles(sessionId);
+                        this.sessions.delete(sessionId);
+                    }
                 }
 
                 this.triggerWebhook({
@@ -287,6 +315,29 @@ class WhatsAppGateway extends EventEmitter {
         }
 
         this.emit('log', `[${sessionId}] Saved session configuration. Webhook URL: ${metadata.webhookUrl || 'Not set'}`);
+    }
+
+    // Request a pairing code for a session
+    async requestPairingCode(sessionId, phoneNumber) {
+        const session = this.sessions.get(sessionId);
+        if (!session) {
+            throw new Error(`WhatsApp session "${sessionId}" not found.`);
+        }
+        if (!session.sock) {
+            throw new Error('Socket is not initialized yet. Please wait a moment.');
+        }
+
+        const cleanPhone = phoneNumber.replace(/\D/g, '');
+        this.emit('log', `[${sessionId}] Requesting pairing code for: ${cleanPhone}...`);
+        
+        try {
+            const code = await session.sock.requestPairingCode(cleanPhone);
+            this.emit('log', `[${sessionId}] Pairing code generated successfully: ${code}`);
+            return code;
+        } catch (err) {
+            this.emit('log', `[${sessionId}] Failed to request pairing code: ${err.message}`);
+            throw err;
+        }
     }
 
     // Helper to send Webhook payload
@@ -568,6 +619,7 @@ class WhatsAppGateway extends EventEmitter {
                 status: val.status,
                 hasQr: !!val.qrCodeData,
                 qrCode: val.qrCodeData,
+                pairingCode: val.pairingCode || null,
                 queueLength: val.queue ? val.queue.length : 0,
                 webhookUrl: val.webhookUrl || null
             });
