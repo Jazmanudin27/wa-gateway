@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
 import express from 'express';
 import cors from 'cors';
 import http from 'http';
@@ -11,6 +11,8 @@ import { initDb, getMessages, clearMessages } from './db.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+dotenv.config({ path: path.join(__dirname, '.env') });
+
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -21,7 +23,6 @@ const io = new Server(server, {
 });
 
 const PORT = process.env.PORT || 3000;
-const API_KEY = process.env.API_KEY || 'my_secure_super_secret_key_123';
 
 // Middleware
 app.use(cors());
@@ -248,7 +249,7 @@ app.use((req, res) => {
 server.listen(PORT, async () => {
     console.log(`=================================================`);
     console.log(`🚀 WA Multi-Session Gateway running on http://localhost:${PORT}`);
-    console.log(`🔐 API Key security is active.`);
+    console.log(`🔐 Active API Key: ${process.env.API_KEY ? process.env.API_KEY.trim() : 'my_secure_super_secret_key_123 (Default)'}`);
     console.log(`=================================================`);
     
     try {
