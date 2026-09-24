@@ -140,6 +140,7 @@ class WhatsAppGateway extends EventEmitter {
 
             if (qr) {
                 sessionObj.status = 'qr';
+                sessionObj.reconnectAttempts = 0;
 
                 // Request pairing code if phone number is provided during creation and we haven't requested it yet
                 if (phoneNumber && !sessionObj.pairingCode) {
@@ -196,10 +197,16 @@ class WhatsAppGateway extends EventEmitter {
 
             if (connection === 'close') {
                 const isRegistered = sock.authState?.creds?.registered;
-                const shouldReconnect = isRegistered && lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-                const errDetail = lastDisconnect?.error?.message || 'unknown';
+                const statusCode = lastDisconnect?.error?.output?.statusCode;
+                const errDetail = lastDisconnect?.error?.message || lastDisconnect?.error || 'unknown';
+                const isLoggedOut = statusCode === DisconnectReason.loggedOut;
                 
-                this.emit('log', `[${sessionId}] Connection closed due to: ${errDetail}. Reconnecting: ${shouldReconnect}`);
+                // Allow reconnection if not explicitly logged out
+                sessionObj.reconnectAttempts = (sessionObj.reconnectAttempts || 0) + 1;
+                const maxUnregisteredRetries = 5;
+                const shouldReconnect = !isLoggedOut && (isRegistered || sessionObj.reconnectAttempts <= maxUnregisteredRetries);
+                
+                this.emit('log', `[${sessionId}] Connection closed (code: ${statusCode || 'N/A'}). Detail: ${errDetail}. Attempt: ${sessionObj.reconnectAttempts}. Reconnecting: ${shouldReconnect}`);
 
                 if (shouldReconnect) {
                     sessionObj.status = 'connecting';
@@ -209,18 +216,20 @@ class WhatsAppGateway extends EventEmitter {
                         clearTimeout(this.reconnectTimeouts.get(sessionId));
                     }
 
+                    const delayMs = statusCode === DisconnectReason.restartRequired ? 1000 : 3000;
                     const timeout = setTimeout(() => {
-                        this.createSession(sessionId);
-                    }, 5000);
+                        this.createSession(sessionId, phoneNumber);
+                    }, delayMs);
                     this.reconnectTimeouts.set(sessionId, timeout);
                 } else {
                     sessionObj.status = 'disconnected';
                     sessionObj.qrCodeData = null;
                     sessionObj.pairingCode = null;
+                    sessionObj.reconnectAttempts = 0;
                     this.emit('status', { sessionId, status: 'disconnected' });
                     this.emit('log', `[${sessionId}] Session stopped.`);
 
-                    if (lastDisconnect?.error?.output?.statusCode === DisconnectReason.loggedOut) {
+                    if (isLoggedOut) {
                         this.emit('log', `[${sessionId}] Session logged out. Deleting credentials...`);
                         this.clearSessionFiles(sessionId);
                         this.sessions.delete(sessionId);
