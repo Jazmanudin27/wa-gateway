@@ -31,7 +31,8 @@ app.use(express.static(path.join(__dirname, 'public')));
 // API Key Middleware for secure routes
 const authenticateApiKey = (req, res, next) => {
     const apiKey = req.headers['x-api-key'];
-    if (!apiKey || apiKey !== API_KEY) {
+    const serverKey = (process.env.API_KEY || 'my_secure_super_secret_key_123').trim();
+    if (!apiKey || apiKey.trim() !== serverKey) {
         return res.status(401).json({ error: 'Unauthorized: Invalid or missing API key.' });
     }
     next();
