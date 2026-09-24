@@ -110,29 +110,35 @@ class WhatsAppGateway extends EventEmitter {
 
         const { state, saveCreds } = await useMultiFileAuthState(sessionFolder);
 
-        // Fetch latest version or fallback to stable
         let version = [2, 3000, 1015901307];
         try {
-            const latest = await fetchLatestBaileysVersion();
+            const versionPromise = fetchLatestBaileysVersion();
+            const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Version fetch timeout')), 4000)
+            );
+            const latest = await Promise.race([versionPromise, timeoutPromise]);
             version = latest.version;
             this.emit('log', `[${sessionId}] Using WhatsApp version: ${version.join('.')}`);
         } catch (err) {
             this.emit('log', `[${sessionId}] Using fallback WhatsApp version: ${version.join('.')}`);
         }
 
-        const sock = makeWASocket({
-            version,
-            auth: state,
-            logger: this.logger,
-            browser: Browsers.macOS('Desktop'),
-            defaultQueryTimeoutMs: 60000,
-            connectTimeoutMs: 60000,
-        });
+        try {
+            const sock = makeWASocket({
+                version,
+                auth: state,
+                logger: this.logger,
+                browser: Browsers.ubuntu('Chrome'),
+                defaultQueryTimeoutMs: 60000,
+                connectTimeoutMs: 60000,
+                syncFullHistory: false,
+                markOnlineOnConnect: false
+            });
 
-        sessionObj.sock = sock;
+            sessionObj.sock = sock;
 
-        // Credentials save handler
-        sock.ev.on('creds.update', saveCreds);
+            // Credentials save handler
+            sock.ev.on('creds.update', saveCreds);
 
         // Connection update listener
         sock.ev.on('connection.update', async (update) => {
@@ -300,9 +306,11 @@ class WhatsAppGateway extends EventEmitter {
                     this.emit('log', `[Database Error] Failed to log incoming message: ${err.message}`);
                 });
 
-                this.triggerWebhook(messagePayload);
-            }
-        });
+        } catch (socketErr) {
+            this.emit('log', `[${sessionId}] Failed to initialize WASocket: ${socketErr.message}`);
+            sessionObj.status = 'disconnected';
+            this.emit('status', { sessionId, status: 'disconnected' });
+        }
 
         return sessionObj;
     }
