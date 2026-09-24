@@ -306,6 +306,9 @@ class WhatsAppGateway extends EventEmitter {
                     this.emit('log', `[Database Error] Failed to log incoming message: ${err.message}`);
                 });
 
+                this.triggerWebhook(messagePayload);
+            }
+        });
         } catch (socketErr) {
             this.emit('log', `[${sessionId}] Failed to initialize WASocket: ${socketErr.message}`);
             sessionObj.status = 'disconnected';
